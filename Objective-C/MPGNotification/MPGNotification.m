@@ -37,10 +37,10 @@ static const CGFloat kNotificationHeight = 64;
 static const CGFloat kIconImageSize = 32.0;
 static const NSTimeInterval kLinearAnimationTime = 0.25;
 
-NSString * const kTitleFontName = @"HelveticaNeue-Bold";
+const NSString *kTitleFontName = @"HelveticaNeue-Bold";
 static const CGFloat kTitleFontSize = 17.0;
 
-NSString * const kSubtitleFontName = @"HelveticaNeue";
+const NSString *kSubtitleFontName = @"HelveticaNeue";
 static const CGFloat kSubtitleFontSize = 14.0;
 
 static const CGFloat kButtonFontSize = 13.0;
@@ -136,10 +136,6 @@ static const CGFloat kColorAdjustmentLight = 0.35;
     return self;
 }
 
-//- (void)dealloc {
-//    NSLog(@"DEBUG: NOTIFICATION DEALLOC");
-//}
-
 #pragma mark - Class Overrides
 
 - (void)layoutSubviews {
@@ -162,7 +158,7 @@ static const CGFloat kColorAdjustmentLight = 0.35;
     static const CGFloat kButtonOriginXOffset = 75;
     static const CGFloat kCloseButtonOriginXOffset = 40;
     
-    static const CGFloat kButtonWidthDefault = 64;
+    static const CGFloat kButtonWidthDefault = 70; // PAUL: was 64
     static const CGFloat kButtonPadding = 2.5;
     
     static const CGFloat kCloseButtonOriginY = 17;
@@ -187,30 +183,15 @@ static const CGFloat kColorAdjustmentLight = 0.35;
     static const CGFloat kTitleLabelPaddingX = 8;
     static const CGFloat kTitleLabelHeight = 20;
     
-    CGFloat textPaddingX = (self.iconImage) ? CGRectGetMaxX(self.iconImageView.frame) + kTitleLabelPaddingX : kPaddingX + 5;
+    CGFloat textPaddingX = (self.iconImageView) ? CGRectGetMaxX(self.iconImageView.frame) + kTitleLabelPaddingX : kPaddingX;
     CGFloat textTrailingX = (self.firstButton) ? CGRectGetWidth(self.bounds) - CGRectGetMinX(self.firstButton.frame) + 9 : 20;
     CGFloat textWidth = notificationWidth - (textPaddingX + textTrailingX);
     
     // expected subtitle calculations
+    // TODO: this method is deprecated; update this (use Evil Studios NSString category?)
     static const CGFloat kSubtitleHeight = 50;
-    CGSize expectedSubtitleSize;
-    
-    // use new sizeWithAttributes: if possible
-    SEL selector = NSSelectorFromString(@"sizeWithAttributes:");
-    if ([self.subtitle respondsToSelector:selector]) {
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 70000
-        NSDictionary *attributes = @{NSFontAttributeName:self.subtitleLabel.font};
-        CGRect rect = [self.subtitle boundingRectWithSize:CGSizeMake(textWidth, kSubtitleHeight) options:NSStringDrawingUsesLineFragmentOrigin attributes:attributes context:nil];
-        expectedSubtitleSize = rect.size;
-#endif
-    }
-    
-    // otherwise use old sizeWithFont:
-    else {
-#if __IPHONE_OS_VERSION_MIN_REQUIRED < 70000 // only when deployment target is < ios7
-        expectedSubtitleSize = [self.subtitle sizeWithFont:self.subtitleLabel.font];
-#endif
-    }
+    CGSize expectedSubtitleSize = [self.subtitle sizeWithFont:self.subtitleLabel.font
+                                            constrainedToSize:CGSizeMake(textWidth, kSubtitleHeight)];
     
     BOOL subtitleEmpty = (self.subtitle == nil || self.subtitle.length == 0);
     BOOL subtitleOneLiner = (expectedSubtitleSize.height < 25 && subtitleEmpty == NO);
@@ -233,19 +214,18 @@ static const CGFloat kColorAdjustmentLight = 0.35;
     [self.subtitleLabel sizeToFit];
     
     
-    // SWIPE HINT VIEW, ONLY SHOW IF ENABLED
-    if(self.swipeToDismissEnabled){
-        static const CGFloat kSwipeHintWidth = 37;
-        static const CGFloat kSwipeHintHeight = 5;
-        static const CGFloat kSwipeHintTrailingY = 5;
-        
-        self.swipeHintView.frame = CGRectMake(0.5 * (CGRectGetWidth(self.backgroundView.bounds) - kSwipeHintWidth),
-                                              CGRectGetHeight(self.backgroundView.bounds) - kSwipeHintTrailingY - kSwipeHintHeight,
-                                              kSwipeHintWidth,
-                                              kSwipeHintHeight);
-        
-        self.swipeHintView.layer.cornerRadius = CGRectGetHeight(self.swipeHintView.bounds) * 0.5;
-    }
+    // SWIPE HINT VIEW
+    static const CGFloat kSwipeHintWidth = 37;
+    static const CGFloat kSwipeHintHeight = 5;
+    static const CGFloat kSwipeHintTrailingY = 5;
+    
+    self.swipeHintView.frame = CGRectMake(0.5 * (CGRectGetWidth(self.backgroundView.bounds) - kSwipeHintWidth),
+                                          CGRectGetHeight(self.backgroundView.bounds) - kSwipeHintTrailingY - kSwipeHintHeight,
+                                          kSwipeHintWidth,
+                                          kSwipeHintHeight);
+    
+    self.swipeHintView.layer.cornerRadius = CGRectGetHeight(self.swipeHintView.bounds) * 0.5;
+    
     
     // COLORS!!
     self.swipeHintView.backgroundColor = [self _darkerColorForColor:self.backgroundColor];
@@ -266,19 +246,29 @@ static const CGFloat kColorAdjustmentLight = 0.35;
 }
 
 - (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate {
+    
     if (!decelerate &&
         [self _notificationOffScreen] &&
         self.notificationRevealed) {
         
+        // PAUL: Show status bar
+        [[[[UIApplication sharedApplication] delegate] window] setWindowLevel:self.windowLevel];
+        
         [self _destroyNotification];
+        
     }
+    
 }
 
 - (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView {
+    
     if ([self _notificationOffScreen] &&
         self.notificationRevealed) {
+        // PAUL: Show status bar
+        [[[[UIApplication sharedApplication] delegate] window] setWindowLevel:self.windowLevel];
         [self _destroyNotification];
     }
+    
 }
 
 #pragma mark - UIDynamicAnimator Delegate
@@ -288,16 +278,6 @@ static const CGFloat kColorAdjustmentLight = 0.35;
 }
 
 #pragma mark - Class Methods
-
-+ (MPGNotification *)notificationWithHostViewController:(UIViewController *)hostViewController title:(NSString *)title subtitle:(NSString *)subtitle backgroundColor:(UIColor *)color iconImage:(UIImage *)image {
-    
-    MPGNotification *newNotification = [MPGNotification notificationWithTitle:title subtitle:subtitle backgroundColor:color iconImage:image];
-    
-    newNotification.hostViewController = hostViewController;
-    
-    return newNotification;
-    
-}
 
 + (MPGNotification *)notificationWithTitle:(NSString *)title subtitle:(NSString *)subtitle backgroundColor:(UIColor *)color iconImage:(UIImage *)image {
     
@@ -366,6 +346,7 @@ static const CGFloat kColorAdjustmentLight = 0.35;
     
     if (!self.iconImageView) {
         self.iconImageView = [[UIImageView alloc] initWithFrame:CGRectZero];
+        self.iconImageView.contentMode = UIViewContentModeScaleAspectFit;
         [self.backgroundView addSubview:self.iconImageView];
     }
     
@@ -404,16 +385,6 @@ static const CGFloat kColorAdjustmentLight = 0.35;
             [self.backgroundView addSubview:self.swipeHintView];
         }
         
-    }
-    
-}
-
-- (void)setHostViewController:(UIViewController *)hostViewController {
-    
-    if (self.notificationRevealed && hostViewController == nil) {
-        NSAssert(NO, @"Cannot set hostViewController to nil after the Notification has been revealed.");
-    } else {
-        _hostViewController = hostViewController;
     }
     
 }
@@ -469,12 +440,9 @@ static const CGFloat kColorAdjustmentLight = 0.35;
             
             if (configuration == MPGNotificationButtonConfigrationTwoButton) {
                 
-                NSInteger tagIncrement = 4317; // large, random increment to prevent overlapping tags
-                NSInteger tag = buttonTag + tagIncrement;
-                
                 NSString *secondButtonTitle = buttonTitles[1];
                 if (!self.secondButton) {
-                    self.secondButton = [self _newButtonWithTitle:secondButtonTitle withTag:tag];
+                    self.secondButton = [self _newButtonWithTitle:secondButtonTitle withTag:buttonTag];
                     [self.backgroundView addSubview:self.secondButton];
                 } else {
                     [self.secondButton setTitle:firstButtonTitle forState:UIControlStateNormal];
@@ -506,36 +474,36 @@ static const CGFloat kColorAdjustmentLight = 0.35;
 }
 
 - (void)dismissWithAnimation:(BOOL)animated {
-    
     [self _dismissAnimated:animated];
-    
 }
 
 #pragma mark - Private Methods - Show/Dismiss
 
 - (void)_showNotification {
-    
     // Called to display the initiliased notification on screen.
     
     self.notificationRevealed = YES;
     
-    if (self.hostViewController) {
-        
-        [self.hostViewController.view addSubview:self];
-        
-    } else {
-        
-        UIWindow *window = [self _topAppWindow];
-        
-        self.windowLevel = [[[[UIApplication sharedApplication] delegate] window] windowLevel];
-        
-        // Update windowLevel to make sure status bar does not interfere with the notification
-        [[[[UIApplication sharedApplication] delegate] window] setWindowLevel:UIWindowLevelStatusBar+1];
-        
-        // add the notification to the screen
-        [window.subviews.lastObject addSubview:self];
-        
+    UIWindow *window = [self _topAppWindow];
+
+    // PAUL: Hide visible notifications
+    UIView *topMostView = window.subviews.lastObject;
+    for (UIView *view in topMostView.subviews) {
+        if ([view isKindOfClass:[MPGNotification class]]) {
+            MPGNotification *notification = view;
+            
+            [notification dismissWithAnimation:YES];
+            break;
+        }
     }
+    
+    self.windowLevel = [[[[UIApplication sharedApplication] delegate] window] windowLevel];
+    
+    // Update windowLevel to make sure status bar does not interfere with the notification
+    [[[[UIApplication sharedApplication] delegate] window] setWindowLevel:UIWindowLevelStatusBar+1];
+    
+    // add the notification to the screen
+    [window.subviews.lastObject addSubview:self];
     
     switch (self.animationType) {
         case MPGNotificationAnimationTypeLinear: {
@@ -555,7 +523,7 @@ static const CGFloat kColorAdjustmentLight = 0.35;
         case MPGNotificationAnimationTypeDrop: {
             
             self.backgroundView.center = CGPointMake(self.center.x,
-                                                     self.center.y - CGRectGetHeight(self.bounds));
+                                                       self.center.y - CGRectGetHeight(self.bounds));
             
             self.animator = [[UIDynamicAnimator alloc] initWithReferenceView:self];
             
@@ -584,7 +552,7 @@ static const CGFloat kColorAdjustmentLight = 0.35;
         case MPGNotificationAnimationTypeSnap: {
             
             self.backgroundView.center = CGPointMake(self.center.x,
-                                                     self.center.y - 2 * CGRectGetHeight(self.bounds));
+                                                       self.center.y - 2 * CGRectGetHeight(self.bounds));
             
             self.animator = [[UIDynamicAnimator alloc] initWithReferenceView:self];
             
@@ -594,7 +562,7 @@ static const CGFloat kColorAdjustmentLight = 0.35;
             UISnapBehavior *snapBehaviour = [[UISnapBehavior alloc] initWithItem:self.backgroundView snapToPoint:centerPoint];
             snapBehaviour.damping = 0.50f;
             [self.animator addBehavior:snapBehaviour];
-            
+
             [self _startDismissTimerIfSet];
             break;
         }
@@ -618,6 +586,8 @@ static const CGFloat kColorAdjustmentLight = 0.35;
                 [UIView animateWithDuration:kLinearAnimationTime animations:^{
                     self.contentOffset = CGPointMake(0, CGRectGetHeight(self.bounds));
                 } completion:^(BOOL finished){
+                    [[[[UIApplication sharedApplication] delegate] window] setWindowLevel:self.windowLevel];
+                    
                     [self _destroyNotification];
                 }];
                 break;
@@ -629,13 +599,17 @@ static const CGFloat kColorAdjustmentLight = 0.35;
                 UISnapBehavior *snapBehaviour = [[UISnapBehavior alloc] initWithItem:self.backgroundView snapToPoint:CGPointMake(viewBounds.size.width, -74)];
                 snapBehaviour.damping = 0.75f;
                 [self.animator addBehavior:snapBehaviour];
+                
+                [[[[UIApplication sharedApplication] delegate] window] setWindowLevel:self.windowLevel];
                 break;
             }
         }
         
     } else {
         
-        [self _destroyNotification];
+        [[[[UIApplication sharedApplication] delegate] window] setWindowLevel:self.windowLevel];
+        
+        [self _dismissBlockHandler];
     }
     
 }
@@ -723,11 +697,6 @@ static const CGFloat kColorAdjustmentLight = 0.35;
 }
 
 - (void)_destroyNotification {
-    
-    if (self.hostViewController == nil) {
-        [[[[UIApplication sharedApplication] delegate] window] setWindowLevel:self.windowLevel];
-    }
-    
     [self _dismissBlockHandler];
     
     self.animator.delegate = nil;
@@ -756,7 +725,6 @@ static const CGFloat kColorAdjustmentLight = 0.35;
 - (void)_dismissBlockHandler {
     if (self.dismissHandler) {
         self.dismissHandler(self);
-        self.dismissHandler = nil;
     }
 }
 
